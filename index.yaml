@@ -10,18 +10,5 @@ entries:
     type: application
     urls:
     - https://vivekch0976.github.io/helm/mychart-0.1.0.tgz
-    version: 0.1.0
-    
-  rabbitmq:
-  - apiVersion: v2
-    appVersion: "1.0"
-    created: "2025-12-07T18:10:59.388414125+01:00"
-    description: A Helm chart for Kubernetes
-    digest: e0e0d3e412771984671604a94069115e4722433216b8dcd4419720e81c247367
-    name: rabbitmq
-    type: application
-    urls:
-    - https://vivekch0976.github.io/helm/rabbitmq-0.1.0.tgz
-    version: 0.1.0
-    
+    version: 0.1.0 
 generated: "2025-12-06T11:18:43.149317264+01:00"
