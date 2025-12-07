@@ -3,7 +3,7 @@ entries:
   rabbitmq:
   - apiVersion: v2
     appVersion: "1.0"
-    created: "2025-12-07T17:55:02.118215534+01:00"
+    created: "2025-12-07T18:10:59.388414125+01:00"
     description: A Helm chart for Kubernetes
     digest: e0e0d3e412771984671604a94069115e4722433216b8dcd4419720e81c247367
     name: rabbitmq
@@ -11,4 +11,4 @@ entries:
     urls:
     - https://vivekch0976.github.io/helm/rabbitmq-0.1.0.tgz
     version: 0.1.0
-generated: "2025-12-07T17:55:02.109417388+01:00"
+generated: "2025-12-07T18:10:59.387570419+01:00"
