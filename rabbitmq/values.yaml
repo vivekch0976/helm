@@ -1,0 +1,26 @@
+image:
+  repository: vivekch0976/rabbitmq-custom
+  tag: "full"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: NodePort
+  amqpPort: 5672
+  managementPort: 15672
+
+persistence:
+  enabled: true
+  size: 5Gi
+  accessMode: ReadWriteOnce
+  storageClass: "standard"
+
+rabbitmq:
+  user: noob
+  password: noob
+  vhost: /app_vhost
+
+serviceAccount:
+  create: false
+  name: ""

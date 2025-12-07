@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: rabbitmq
+  ports:
+    - name: amqp
+      port: {{ .Values.service.amqpPort }}
+      targetPort: {{ .Values.service.amqpPort }}
+    - name: management
+      port: {{ .Values.service.managementPort }}
+      targetPort: {{ .Values.service.managementPort }}
