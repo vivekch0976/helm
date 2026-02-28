@@ -5,7 +5,7 @@
 -include .env
 export
 
-.PHONY: help install-cnpg-operator install-postgres uninstall-postgres install-oracle uninstall-oracle \
+.PHONY: help install-cnpg-operator install-postgres install-postgres-connect uninstall-postgres install-oracle uninstall-oracle \
         install-all uninstall-all lint template-postgres template-oracle status-postgres status-oracle \
         logs-postgres logs-oracle port-forward-postgres port-forward-oracle clean \
         package package-postgres package-oracle repo-index repo-update \
@@ -17,7 +17,8 @@ help:
 	@echo "Database Helm Charts - Makefile"
 	@echo ""
 	@echo "Installation:"
-	@echo "  make install-postgres       Deploy PostgreSQL (operator + cluster + wait for ready)"
+	@echo "  make install-postgres         Deploy PostgreSQL (operator + cluster)"
+	@echo "  make install-postgres-connect Deploy PostgreSQL + auto port-forward"
 	@echo "  make install-oracle         Install Oracle XE database"
 	@echo "  make install-all            Install both databases"
 	@echo ""
@@ -64,8 +65,8 @@ ORACLE_NAMESPACE ?= oracle
 ORACLE_VALUES ?= 
 
 # CNPG Operator
-CNPG_VERSION ?= 1.25.0
-CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.25/releases/cnpg-$(CNPG_VERSION).yaml
+CNPG_VERSION ?= 0.22.1
+CNPG_NAMESPACE ?= cnpg-system
 
 # Git
 GIT_REPO ?= https://github.com/vivekch0976/helm.git
@@ -81,43 +82,105 @@ REPO_URL ?=
 #------------------------------------------------------------------------------
 
 install-cnpg-operator:
-	@echo "Installing CNPG Operator v$(CNPG_VERSION)..."
-	kubectl apply --server-side -f $(CNPG_MANIFEST)
-	@echo "Waiting for CNPG operator to be ready..."
-	kubectl wait --for=condition=available --timeout=180s deployment/cnpg-controller-manager -n cnpg-system
+	@echo "Installing CNPG Operator v$(CNPG_VERSION) via Helm..."
+	helm repo add cnpg https://cloudnative-pg.github.io/charts 2>/dev/null || true
+	helm repo update cnpg
+	kubectl create namespace $(CNPG_NAMESPACE) 2>/dev/null || true
+	helm upgrade --install cnpg cnpg/cloudnative-pg \
+		--namespace $(CNPG_NAMESPACE) \
+		--version $(CNPG_VERSION) \
+		--set resources.limits.memory=1Gi \
+		--set resources.limits.cpu=1 \
+		--wait --timeout 5m
 	@echo "CNPG Operator installed successfully!"
 
 uninstall-cnpg-operator:
 	@echo "Uninstalling CNPG Operator..."
-	kubectl delete -f $(CNPG_MANIFEST) --ignore-not-found=true
+	helm uninstall cnpg -n $(CNPG_NAMESPACE) --ignore-not-found 2>/dev/null || true
 
 #------------------------------------------------------------------------------
 # PostgreSQL
 #------------------------------------------------------------------------------
 
 install-postgres: install-cnpg-operator
-	@echo "Installing CNPG PostgreSQL cluster..."
-	helm upgrade --install $(POSTGRES_RELEASE) ./cnpg-postgres \
+	@echo ""
+	@echo "╔══════════════════════════════════════════════════════════════════╗"
+	@echo "║           🐘 CNPG PostgreSQL Installation                        ║"
+	@echo "╚══════════════════════════════════════════════════════════════════╝"
+	@echo ""
+	@echo "📦 Step 1/5: Creating namespace..."
+	@kubectl create namespace $(POSTGRES_NAMESPACE) 2>/dev/null && echo "   ✓ Namespace '$(POSTGRES_NAMESPACE)' created" || echo "   ✓ Namespace '$(POSTGRES_NAMESPACE)' already exists"
+	@echo ""
+	@echo "📦 Step 2/5: Deploying Helm chart..."
+	@helm upgrade --install $(POSTGRES_RELEASE) ./cnpg-postgres \
 		--namespace $(POSTGRES_NAMESPACE) \
-		--create-namespace \
-		$(if $(POSTGRES_VALUES),-f $(POSTGRES_VALUES),)
-	@echo "Waiting for PostgreSQL cluster to be ready..."
-	@kubectl wait --for=condition=Ready --timeout=300s cluster/$(POSTGRES_RELEASE)-cluster -n $(POSTGRES_NAMESPACE) 2>/dev/null || \
-		(echo "Cluster is starting... checking pod status:" && kubectl get pods -n $(POSTGRES_NAMESPACE) -l cnpg.io/cluster=$(POSTGRES_RELEASE)-cluster)
+		$(if $(POSTGRES_VALUES),-f $(POSTGRES_VALUES),) 2>&1 | head -20
+	@echo "   ✓ Helm chart deployed"
 	@echo ""
-	@echo "=============================================="
-	@echo "PostgreSQL cluster deployed successfully!"
-	@echo "=============================================="
+	@echo "⏳ Step 3/5: Waiting for PostgreSQL cluster to initialize..."
+	@echo "   (This may take 2-5 minutes for first installation)"
 	@echo ""
-	@echo "Connection Details:"
-	@echo "  Host: $(POSTGRES_RELEASE)-cluster-rw.$(POSTGRES_NAMESPACE).svc.cluster.local"
-	@echo "  Port: 5432"
-	@echo "  Database: appdb"
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12; do \
+		PHASE=$$(kubectl get cluster/$(POSTGRES_RELEASE)-cnpg-postgres -n $(POSTGRES_NAMESPACE) -o jsonpath='{.status.phase}' 2>/dev/null || echo "Pending"); \
+		READY=$$(kubectl get cluster/$(POSTGRES_RELEASE)-cnpg-postgres -n $(POSTGRES_NAMESPACE) -o jsonpath='{.status.readyInstances}' 2>/dev/null || echo "0"); \
+		TOTAL=$$(kubectl get cluster/$(POSTGRES_RELEASE)-cnpg-postgres -n $(POSTGRES_NAMESPACE) -o jsonpath='{.spec.instances}' 2>/dev/null || echo "?"); \
+		PODS=$$(kubectl get pods -n $(POSTGRES_NAMESPACE) -l cnpg.io/cluster=$(POSTGRES_RELEASE)-cnpg-postgres --no-headers 2>/dev/null | wc -l); \
+		echo "   [$$i/12] Phase: $$PHASE | Pods: $$PODS | Ready: $$READY/$$TOTAL"; \
+		if [ "$$PHASE" = "Cluster in healthy state" ]; then \
+			echo ""; \
+			echo "   ✅ Cluster is healthy!"; \
+			break; \
+		fi; \
+		sleep 15; \
+	done
 	@echo ""
-	@echo "Quick connect:"
-	@echo "  make port-forward-postgres"
-	@echo "  psql -h localhost -U appuser -d appdb"
+	@echo "📊 Step 4/5: Cluster Status"
+	@echo "   ┌─────────────────────────────────────────────────────────────────┐"
+	@kubectl get cluster -n $(POSTGRES_NAMESPACE) 2>/dev/null | sed 's/^/   │ /'
+	@echo "   └─────────────────────────────────────────────────────────────────┘"
 	@echo ""
+	@echo "   Pods:"
+	@kubectl get pods -n $(POSTGRES_NAMESPACE) --no-headers 2>/dev/null | sed 's/^/   │ /'
+	@echo ""
+	@echo "   Services:"
+	@kubectl get svc -n $(POSTGRES_NAMESPACE) --no-headers 2>/dev/null | sed 's/^/   │ /'
+	@echo ""
+	@echo "╔══════════════════════════════════════════════════════════════════╗"
+	@echo "║  ✅ Step 5/5: Installation Complete!                              ║"
+	@echo "╚══════════════════════════════════════════════════════════════════╝"
+	@echo ""
+	@echo "🔗 CONNECTION STRINGS:"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "   📍 Internal (from apps in cluster):"
+	@echo "      postgresql://appuser:appuser@$(POSTGRES_RELEASE)-cnpg-postgres-rw.$(POSTGRES_NAMESPACE).svc:5432/appdb"
+	@echo ""
+	@echo "   📍 Read-Only Replicas:"
+	@echo "      postgresql://appuser:appuser@$(POSTGRES_RELEASE)-cnpg-postgres-ro.$(POSTGRES_NAMESPACE).svc:5432/appdb"
+	@echo ""
+	@echo "   📍 External (with port-forward):"
+	@echo "      postgresql://appuser:appuser@localhost:5432/appdb"
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "🚀 QUICK START:"
+	@echo ""
+	@echo "   Option 1 - Direct pod access:"
+	@echo "      kubectl exec -it $(POSTGRES_RELEASE)-cnpg-postgres-1 -n $(POSTGRES_NAMESPACE) -- psql -U postgres -d appdb"
+	@echo ""
+	@echo "   Option 2 - Port forward (background):"
+	@echo "      make port-forward-postgres"
+	@echo "      psql 'postgresql://appuser:appuser@localhost:5432/appdb'"
+	@echo ""
+	@echo "   Option 3 - Install with port-forward:"
+	@echo "      make install-postgres-connect"
+	@echo ""
+
+install-postgres-connect: install-postgres
+	@echo "🔌 Starting port-forward on localhost:5432..."
+	@echo "   Press Ctrl+C to stop"
+	@echo ""
+	@kubectl port-forward -n $(POSTGRES_NAMESPACE) svc/$(POSTGRES_RELEASE)-cnpg-postgres-rw 5432:5432
 
 uninstall-postgres:
 	@echo "Uninstalling PostgreSQL cluster..."
@@ -130,14 +193,14 @@ delete-postgres: uninstall-postgres
 	kubectl delete namespace $(POSTGRES_NAMESPACE) --ignore-not-found=true
 	@echo "PostgreSQL fully deleted!"
 
-delete-cnpg-all: delete-postgres
+delete-cnpg-all: delete-postgres uninstall-cnpg-operator
 	@echo "Deleting CNPG Operator and all resources..."
 	kubectl delete namespace cnpg-system --ignore-not-found=true
 	kubectl delete validatingwebhookconfiguration cnpg-validating-webhook-configuration --ignore-not-found=true
 	kubectl delete mutatingwebhookconfiguration cnpg-mutating-webhook-configuration --ignore-not-found=true
-	kubectl delete crd backups.postgresql.cnpg.io clusters.postgresql.cnpg.io poolers.postgresql.cnpg.io scheduledbackups.postgresql.cnpg.io clusterimagecatalogs.postgresql.cnpg.io databases.postgresql.cnpg.io imagecatalogs.postgresql.cnpg.io publications.postgresql.cnpg.io subscriptions.postgresql.cnpg.io --ignore-not-found=true
-	kubectl delete clusterrole cnpg-manager cnpg-database-editor-role cnpg-database-viewer-role cnpg-publication-editor-role cnpg-publication-viewer-role cnpg-subscription-editor-role cnpg-subscription-viewer-role --ignore-not-found=true
-	kubectl delete clusterrolebinding cnpg-manager-rolebinding --ignore-not-found=true
+	kubectl get crd | grep cnpg | awk '{print $$1}' | xargs -r kubectl delete crd 2>/dev/null || true
+	kubectl delete clusterrole -l app.kubernetes.io/name=cloudnative-pg --ignore-not-found=true 2>/dev/null || true
+	kubectl delete clusterrolebinding -l app.kubernetes.io/name=cloudnative-pg --ignore-not-found=true 2>/dev/null || true
 	@echo "CNPG fully deleted!"
 
 status-postgres:
@@ -145,18 +208,18 @@ status-postgres:
 	kubectl get clusters -n $(POSTGRES_NAMESPACE) 2>/dev/null || echo "No CNPG clusters found"
 	@echo ""
 	@echo "=== Pods ==="
-	kubectl get pods -n $(POSTGRES_NAMESPACE) -l cnpg.io/cluster=$(POSTGRES_RELEASE)-cluster 2>/dev/null || kubectl get pods -n $(POSTGRES_NAMESPACE)
+	kubectl get pods -n $(POSTGRES_NAMESPACE) 2>/dev/null || echo "No pods found"
 	@echo ""
 	@echo "=== Services ==="
-	kubectl get svc -n $(POSTGRES_NAMESPACE)
+	kubectl get svc -n $(POSTGRES_NAMESPACE) 2>/dev/null || echo "No services found"
 
 logs-postgres:
-	kubectl logs -f -l cnpg.io/cluster=$(POSTGRES_RELEASE)-cluster -n $(POSTGRES_NAMESPACE) --tail=100
+	kubectl logs -f -l cnpg.io/cluster=$(POSTGRES_RELEASE)-cnpg-postgres -n $(POSTGRES_NAMESPACE) --tail=100
 
 port-forward-postgres:
 	@echo "Port forwarding PostgreSQL on localhost:5432..."
 	@echo "Connection: psql -h localhost -U appuser -d appdb"
-	kubectl port-forward -n $(POSTGRES_NAMESPACE) svc/$(POSTGRES_RELEASE)-cluster-rw 5432:5432
+	kubectl port-forward -n $(POSTGRES_NAMESPACE) svc/$(POSTGRES_RELEASE)-cnpg-postgres-rw 5432:5432
 
 template-postgres:
 	helm template $(POSTGRES_RELEASE) ./cnpg-postgres $(if $(POSTGRES_VALUES),-f $(POSTGRES_VALUES),)

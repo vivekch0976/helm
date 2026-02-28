@@ -43,14 +43,14 @@ cluster:
 # Bootstrap configuration
 bootstrap:
   database: appdb
-  owner: postgres
+  owner: appuser
   extensions:
     - pg_stat_statements
 
 # Storage configuration
 storage:
   size: 10Gi
-  storageClass: standard
+  storageClass: local-path
 
 # Resources
 resources:

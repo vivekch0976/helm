@@ -23,7 +23,7 @@ replicaCount: 1
 
 # Oracle configuration
 oracle:
-  password: OraclePassword123
+  password: Oracle123
   characterSet: AL32UTF8
   # SID is always XE for Express Edition
   sid: XE
