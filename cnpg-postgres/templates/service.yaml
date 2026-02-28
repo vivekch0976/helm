@@ -1,0 +1,35 @@
+{{- if .Values.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cnpg-postgres.clusterName" . }}-lb
+  namespace: {{ include "cnpg-postgres.namespace" . }}
+  labels:
+    {{- include "cnpg-postgres.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    cnpg.io/cluster: {{ include "cnpg-postgres.clusterName" . }}
+    role: primary
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cnpg-postgres.clusterName" . }}-ro-lb
+  namespace: {{ include "cnpg-postgres.namespace" . }}
+  labels:
+    {{- include "cnpg-postgres.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    cnpg.io/cluster: {{ include "cnpg-postgres.clusterName" . }}
+    role: replica
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+{{- end }}

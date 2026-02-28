@@ -1,0 +1,34 @@
+{{- if and .Values.persistence.enabled (eq .Values.deploymentType "deployment") (not .Values.persistence.existingClaim) }}
+{{- if .Values.hostPath.enabled }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "oracle-xe.fullname" . }}-pv
+  labels:
+    {{- include "oracle-xe.labels" . | nindent 4 }}
+spec:
+  capacity:
+    storage: {{ .Values.persistence.size }}
+  accessModes:
+    - {{ .Values.persistence.accessMode }}
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.persistence.storageClass }}
+  hostPath:
+    path: {{ .Values.hostPath.path }}
+---
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "oracle-xe.fullname" . }}-pvc
+  namespace: {{ include "oracle-xe.namespace" . }}
+  labels:
+    {{- include "oracle-xe.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.accessMode }}
+  storageClassName: {{ .Values.persistence.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+{{- end }}

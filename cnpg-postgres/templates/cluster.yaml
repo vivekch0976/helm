@@ -1,0 +1,78 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "cnpg-postgres.clusterName" . }}
+  namespace: {{ include "cnpg-postgres.namespace" . }}
+  labels:
+    {{- include "cnpg-postgres.labels" . | nindent 4 }}
+spec:
+  description: {{ .Values.cluster.description | quote }}
+  imageName: {{ .Values.cluster.image.repository }}:{{ .Values.cluster.image.tag }}
+  instances: {{ .Values.cluster.instances }}
+
+  # PostgreSQL configuration
+  postgresql:
+    parameters:
+      {{- toYaml .Values.cluster.postgresql.parameters | nindent 6 }}
+    pg_hba:
+      {{- range .Values.cluster.postgresql.pg_hba }}
+      - {{ . }}
+      {{- end }}
+
+  # Bootstrap configuration
+  bootstrap:
+    initdb:
+      database: {{ .Values.bootstrap.database }}
+      owner: {{ .Values.bootstrap.owner }}
+      secret:
+        name: {{ include "cnpg-postgres.clusterName" . }}-app-credentials
+      {{- if .Values.bootstrap.extensions }}
+      postInitTemplateSQL:
+        {{- range .Values.bootstrap.extensions }}
+        - CREATE EXTENSION IF NOT EXISTS {{ . }};
+        {{- end }}
+      {{- end }}
+
+  # Superuser secret
+  superuserSecret:
+    name: {{ include "cnpg-postgres.clusterName" . }}-superuser
+
+  # Storage configuration
+  storage:
+    size: {{ .Values.storage.size }}
+    storageClass: {{ .Values.storage.storageClass }}
+
+  # Resources
+  resources:
+    {{- toYaml .Values.resources | nindent 4 }}
+
+  # Affinity for high availability
+  affinity:
+    enablePodAntiAffinity: {{ .Values.affinity.enablePodAntiAffinity }}
+    topologyKey: {{ .Values.affinity.topologyKey }}
+
+  # Monitoring
+  {{- if .Values.monitoring.enabled }}
+  monitoring:
+    enablePodMonitor: true
+  {{- end }}
+
+  {{- if .Values.backup.enabled }}
+  # Backup configuration
+  backup:
+    barmanObjectStore:
+      destinationPath: {{ .Values.backup.s3.destinationPath | quote }}
+      endpointURL: {{ .Values.backup.s3.endpointURL | quote }}
+      s3Credentials:
+        accessKeyId:
+          name: {{ include "cnpg-postgres.clusterName" . }}-backup-creds
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: {{ include "cnpg-postgres.clusterName" . }}-backup-creds
+          key: SECRET_ACCESS_KEY
+      wal:
+        compression: {{ .Values.backup.s3.compression }}
+      data:
+        compression: {{ .Values.backup.s3.compression }}
+    retentionPolicy: {{ .Values.backup.retentionPolicy | quote }}
+  {{- end }}

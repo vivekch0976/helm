@@ -1,0 +1,38 @@
+Oracle XE Database has been deployed!
+
+Release: {{ .Release.Name }}
+Namespace: {{ include "oracle-xe.namespace" . }}
+Deployment Type: {{ .Values.deploymentType }}
+
+=== IMPORTANT ===
+Oracle XE can take 5-10 minutes to start up. Monitor the logs:
+  kubectl logs -f {{ if eq .Values.deploymentType "deployment" }}deployment/{{ include "oracle-xe.fullname" . }}{{ else }}{{ include "oracle-xe.fullname" . }}-0{{ end }} -n {{ include "oracle-xe.namespace" . }}
+
+=== Connection Information ===
+
+Host: {{ include "oracle-xe.fullname" . }}.{{ include "oracle-xe.namespace" . }}.svc.cluster.local
+Port: {{ .Values.service.listener.port }}
+SID: {{ .Values.oracle.sid }}
+PDB: {{ .Values.oracle.pdb }}
+
+=== Get the password ===
+kubectl get secret {{ include "oracle-xe.fullname" . }}-secret -n {{ include "oracle-xe.namespace" . }} -o jsonpath='{.data.ORACLE_PWD}' | base64 -d
+
+=== Connect as SYSDBA ===
+kubectl exec -it {{ if eq .Values.deploymentType "deployment" }}deployment/{{ include "oracle-xe.fullname" . }}{{ else }}{{ include "oracle-xe.fullname" . }}-0{{ end }} -n {{ include "oracle-xe.namespace" . }} -- sqlplus sys/{{ .Values.oracle.password }}@localhost:1521/{{ .Values.oracle.sid }} as sysdba
+
+=== Connect to PDB ===
+kubectl exec -it {{ if eq .Values.deploymentType "deployment" }}deployment/{{ include "oracle-xe.fullname" . }}{{ else }}{{ include "oracle-xe.fullname" . }}-0{{ end }} -n {{ include "oracle-xe.namespace" . }} -- sqlplus appuser/apppassword123@localhost:1521/{{ .Values.oracle.pdb }}
+
+=== Port Forward ===
+kubectl port-forward -n {{ include "oracle-xe.namespace" . }} svc/{{ include "oracle-xe.fullname" . }} 1521:1521
+
+=== JDBC Connection String ===
+jdbc:oracle:thin:@//{{ include "oracle-xe.fullname" . }}.{{ include "oracle-xe.namespace" . }}.svc.cluster.local:{{ .Values.service.listener.port }}/{{ .Values.oracle.pdb }}
+
+{{- if .Values.externalService.enabled }}
+
+=== External Service ===
+External access is enabled via LoadBalancer:
+  kubectl get svc {{ include "oracle-xe.fullname" . }}-lb -n {{ include "oracle-xe.namespace" . }}
+{{- end }}

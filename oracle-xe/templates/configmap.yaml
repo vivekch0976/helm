@@ -1,0 +1,27 @@
+{{- if .Values.initScripts.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "oracle-xe.fullname" . }}-setup-scripts
+  namespace: {{ include "oracle-xe.namespace" . }}
+  labels:
+    {{- include "oracle-xe.labels" . | nindent 4 }}
+data:
+  {{- if .Values.initScripts.setup.createUser }}
+  01_create_user.sql: |
+{{ .Values.initScripts.setup.createUser | indent 4 }}
+  {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "oracle-xe.fullname" . }}-startup-scripts
+  namespace: {{ include "oracle-xe.namespace" . }}
+  labels:
+    {{- include "oracle-xe.labels" . | nindent 4 }}
+data:
+  {{- if .Values.initScripts.startup.configure }}
+  01_startup.sql: |
+{{ .Values.initScripts.startup.configure | indent 4 }}
+  {{- end }}
+{{- end }}

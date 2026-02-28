@@ -1,0 +1,124 @@
+# Default values for oracle-xe Helm chart
+
+# Namespace configuration
+namespace:
+  create: true
+  name: oracle
+
+# Oracle XE image configuration
+image:
+  repository: container-registry.oracle.com/database/express
+  tag: "21.3.0-xe"
+  pullPolicy: IfNotPresent
+
+# Image pull secrets (for Oracle Container Registry)
+imagePullSecrets: []
+# - name: oracle-registry
+
+# Deployment type: "deployment" or "statefulset"
+deploymentType: deployment
+
+# Replica count (should be 1 for Oracle XE)
+replicaCount: 1
+
+# Oracle configuration
+oracle:
+  password: OraclePassword123
+  characterSet: AL32UTF8
+  # SID is always XE for Express Edition
+  sid: XE
+  # PDB name
+  pdb: XEPDB1
+
+# Service configuration
+service:
+  type: ClusterIP
+  listener:
+    port: 1521
+  em:
+    port: 5500
+
+# External LoadBalancer service
+externalService:
+  enabled: false
+  type: LoadBalancer
+
+# Resources
+resources:
+  requests:
+    memory: "2Gi"
+    cpu: "1"
+  limits:
+    memory: "4Gi"
+    cpu: "2"
+
+# Persistence
+persistence:
+  enabled: true
+  storageClass: standard
+  size: 20Gi
+  accessMode: ReadWriteOnce
+  # For Deployment type, use existing PVC
+  existingClaim: ""
+
+# Use PersistentVolume with hostPath (for local development)
+hostPath:
+  enabled: false
+  path: /data/oracle-xe
+
+# Probes
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 300
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 120
+  periodSeconds: 10
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+# Security context
+securityContext:
+  fsGroup: 54321
+
+# Init scripts
+initScripts:
+  enabled: true
+  setup:
+    # Scripts run once during database creation
+    createUser: |
+      ALTER SESSION SET CONTAINER = XEPDB1;
+      
+      CREATE USER appuser IDENTIFIED BY apppassword123
+        DEFAULT TABLESPACE USERS
+        TEMPORARY TABLESPACE TEMP
+        QUOTA UNLIMITED ON USERS;
+      
+      GRANT CREATE SESSION TO appuser;
+      GRANT CREATE TABLE TO appuser;
+      GRANT CREATE VIEW TO appuser;
+      GRANT CREATE SEQUENCE TO appuser;
+      GRANT CREATE PROCEDURE TO appuser;
+      GRANT CREATE TRIGGER TO appuser;
+      GRANT CREATE TYPE TO appuser;
+      GRANT CREATE SYNONYM TO appuser;
+      
+      COMMIT;
+  startup:
+    # Scripts run each time container starts
+    configure: |
+      ALTER SYSTEM SET PROCESSES=300 SCOPE=SPFILE;
+      ALTER SYSTEM SET SESSIONS=335 SCOPE=SPFILE;
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}

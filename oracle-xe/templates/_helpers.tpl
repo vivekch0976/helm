@@ -1,16 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "rabbitmq.name" -}}
+{{- define "oracle-xe.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
-We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
-If release name contains chart name it will be used as a full name.
 */}}
-{{- define "rabbitmq.fullname" -}}
+{{- define "oracle-xe.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -26,16 +24,16 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "rabbitmq.chart" -}}
+{{- define "oracle-xe.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "rabbitmq.labels" -}}
-helm.sh/chart: {{ include "rabbitmq.chart" . }}
-{{ include "rabbitmq.selectorLabels" . }}
+{{- define "oracle-xe.labels" -}}
+helm.sh/chart: {{ include "oracle-xe.chart" . }}
+{{ include "oracle-xe.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -45,18 +43,21 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "rabbitmq.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "rabbitmq.name" . }}
+{{- define "oracle-xe.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "oracle-xe.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Create the name of the service account to use
+Namespace
 */}}
-{{- define "rabbitmq.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "rabbitmq.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
+{{- define "oracle-xe.namespace" -}}
+{{- default .Release.Namespace .Values.namespace.name }}
 {{- end }}
+
+{{/*
+Image name
+*/}}
+{{- define "oracle-xe.image" -}}
+{{- printf "%s:%s" .Values.image.repository .Values.image.tag }}
 {{- end }}

@@ -1,0 +1,108 @@
+# Default values for cnpg-postgres Helm chart
+
+# Namespace configuration
+namespace:
+  create: true
+  name: postgres
+
+# Cluster configuration
+cluster:
+  name: postgres-cluster
+  description: "PostgreSQL Cluster managed by CloudNativePG"
+  instances: 3
+  
+  # PostgreSQL image
+  image:
+    repository: ghcr.io/cloudnative-pg/postgresql
+    tag: "18"
+  
+  # PostgreSQL configuration
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "256MB"
+      effective_cache_size: "512MB"
+      maintenance_work_mem: "128MB"
+      checkpoint_completion_target: "0.9"
+      wal_buffers: "16MB"
+      default_statistics_target: "100"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+      work_mem: "4MB"
+      min_wal_size: "1GB"
+      max_wal_size: "4GB"
+      max_worker_processes: "4"
+      max_parallel_workers_per_gather: "2"
+      max_parallel_maintenance_workers: "2"
+      max_parallel_workers: "4"
+    pg_hba:
+      - "host all all 10.0.0.0/8 md5"
+      - "host all all 172.16.0.0/12 md5"
+      - "host all all 192.168.0.0/16 md5"
+
+# Bootstrap configuration
+bootstrap:
+  database: appdb
+  owner: postgres
+  extensions:
+    - pg_stat_statements
+
+# Storage configuration
+storage:
+  size: 10Gi
+  storageClass: standard
+
+# Resources
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "1"
+
+# High Availability
+affinity:
+  enablePodAntiAffinity: true
+  topologyKey: kubernetes.io/hostname
+
+# Monitoring
+monitoring:
+  enabled: true
+
+# Secrets
+secrets:
+  superuser:
+    username: postgres
+    password: supersecretpassword
+  appuser:
+    username: appuser
+    password: appuserpassword
+
+# Backup configuration
+backup:
+  enabled: false
+  schedule: "0 0 * * *"
+  retentionPolicy: "30d"
+  s3:
+    destinationPath: "s3://postgres-backups/"
+    endpointURL: "http://minio:9000"
+    accessKeyId: minioadmin
+    secretAccessKey: minioadmin
+    compression: gzip
+
+# Connection Pooler (PgBouncer)
+pooler:
+  enabled: false
+  instances: 3
+  poolMode: session
+  parameters:
+    max_client_conn: "1000"
+    default_pool_size: "25"
+    log_connections: "1"
+    log_disconnections: "1"
+
+# External Service
+service:
+  enabled: false
+  type: LoadBalancer

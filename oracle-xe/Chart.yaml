@@ -1,0 +1,17 @@
+apiVersion: v2
+name: oracle-xe
+description: A Helm chart for Oracle Express Edition (XE) database
+type: application
+version: 1.0.0
+appVersion: "21.3.0"
+keywords:
+  - oracle
+  - database
+  - oracle-xe
+  - express-edition
+home: https://www.oracle.com/database/technologies/appdev/xe.html
+sources:
+  - https://container-registry.oracle.com/
+maintainers:
+  - name: DevOps Team
+    email: devops@example.com

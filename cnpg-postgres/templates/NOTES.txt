@@ -1,0 +1,45 @@
+CNPG PostgreSQL Cluster has been deployed!
+
+Cluster Name: {{ include "cnpg-postgres.clusterName" . }}
+Namespace: {{ include "cnpg-postgres.namespace" . }}
+Instances: {{ .Values.cluster.instances }}
+
+=== IMPORTANT ===
+Make sure the CNPG operator is installed before deploying this chart:
+  kubectl apply -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.22/releases/cnpg-1.22.0.yaml
+
+=== Connection Information ===
+
+Primary (Read-Write):
+  Host: {{ include "cnpg-postgres.clusterName" . }}-rw.{{ include "cnpg-postgres.namespace" . }}.svc.cluster.local
+  Port: 5432
+
+Replicas (Read-Only):
+  Host: {{ include "cnpg-postgres.clusterName" . }}-ro.{{ include "cnpg-postgres.namespace" . }}.svc.cluster.local
+  Port: 5432
+
+Database: {{ .Values.bootstrap.database }}
+Username: {{ .Values.secrets.appuser.username }}
+
+=== Get the password ===
+kubectl get secret {{ include "cnpg-postgres.clusterName" . }}-app-credentials -n {{ include "cnpg-postgres.namespace" . }} -o jsonpath='{.data.password}' | base64 -d
+
+=== Connect to the cluster ===
+kubectl exec -it {{ include "cnpg-postgres.clusterName" . }}-1 -n {{ include "cnpg-postgres.namespace" . }} -- psql -U {{ .Values.secrets.appuser.username }} -d {{ .Values.bootstrap.database }}
+
+=== Port Forward ===
+kubectl port-forward -n {{ include "cnpg-postgres.namespace" . }} svc/{{ include "cnpg-postgres.clusterName" . }}-rw 5432:5432
+
+{{- if .Values.pooler.enabled }}
+
+=== Connection Pooler (PgBouncer) ===
+Read-Write Pooler: {{ include "cnpg-postgres.clusterName" . }}-pooler-rw.{{ include "cnpg-postgres.namespace" . }}.svc.cluster.local:5432
+Read-Only Pooler: {{ include "cnpg-postgres.clusterName" . }}-pooler-ro.{{ include "cnpg-postgres.namespace" . }}.svc.cluster.local:5432
+{{- end }}
+
+{{- if .Values.backup.enabled }}
+
+=== Backup ===
+Schedule: {{ .Values.backup.schedule }}
+Retention: {{ .Values.backup.retentionPolicy }}
+{{- end }}

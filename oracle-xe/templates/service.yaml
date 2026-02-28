@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "oracle-xe.fullname" . }}
+  namespace: {{ include "oracle-xe.namespace" . }}
+  labels:
+    {{- include "oracle-xe.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "oracle-xe.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: oracle-listener
+      port: {{ .Values.service.listener.port }}
+      targetPort: 1521
+      protocol: TCP
+    - name: oracle-em
+      port: {{ .Values.service.em.port }}
+      targetPort: 5500
+      protocol: TCP
+{{- if .Values.externalService.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "oracle-xe.fullname" . }}-lb
+  namespace: {{ include "oracle-xe.namespace" . }}
+  labels:
+    {{- include "oracle-xe.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.externalService.type }}
+  selector:
+    {{- include "oracle-xe.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: oracle-listener
+      port: {{ .Values.service.listener.port }}
+      targetPort: 1521
+      protocol: TCP
+    - name: oracle-em
+      port: {{ .Values.service.em.port }}
+      targetPort: 5500
+      protocol: TCP
+{{- end }}

@@ -1,0 +1,134 @@
+{{- if eq .Values.deploymentType "statefulset" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "oracle-xe.fullname" . }}
+  namespace: {{ include "oracle-xe.namespace" . }}
+  labels:
+    {{- include "oracle-xe.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "oracle-xe.fullname" . }}-headless
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "oracle-xe.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "oracle-xe.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      containers:
+        - name: oracle-xe
+          image: {{ include "oracle-xe.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: oracle-listener
+              containerPort: 1521
+              protocol: TCP
+            - name: oracle-em
+              containerPort: 5500
+              protocol: TCP
+          env:
+            - name: ORACLE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "oracle-xe.fullname" . }}-secret
+                  key: ORACLE_PWD
+            - name: ORACLE_CHARACTERSET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "oracle-xe.fullname" . }}-secret
+                  key: ORACLE_CHARACTERSET
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: oracle-data
+              mountPath: /opt/oracle/oradata
+            {{- if .Values.initScripts.enabled }}
+            - name: oracle-startup
+              mountPath: /opt/oracle/scripts/startup
+            - name: oracle-setup
+              mountPath: /opt/oracle/scripts/setup
+            {{- end }}
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - echo "SELECT 1 FROM DUAL;" | sqlplus -s sys/$ORACLE_PWD@localhost:1521/XE as sysdba | grep -q 1
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - echo "SELECT 1 FROM DUAL;" | sqlplus -s sys/$ORACLE_PWD@localhost:1521/XE as sysdba | grep -q 1
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          {{- end }}
+      {{- if .Values.initScripts.enabled }}
+      volumes:
+        - name: oracle-startup
+          configMap:
+            name: {{ include "oracle-xe.fullname" . }}-startup-scripts
+            optional: true
+        - name: oracle-setup
+          configMap:
+            name: {{ include "oracle-xe.fullname" . }}-setup-scripts
+            optional: true
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if .Values.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: oracle-data
+      spec:
+        accessModes:
+          - {{ .Values.persistence.accessMode }}
+        storageClassName: {{ .Values.persistence.storageClass }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}
+  {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "oracle-xe.fullname" . }}-headless
+  namespace: {{ include "oracle-xe.namespace" . }}
+  labels:
+    {{- include "oracle-xe.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "oracle-xe.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: oracle-listener
+      port: 1521
+      targetPort: 1521
+{{- end }}
