@@ -9,7 +9,8 @@ export
         install-all uninstall-all lint template-postgres template-oracle status-postgres status-oracle \
         logs-postgres logs-oracle port-forward-postgres port-forward-oracle clean \
         package package-postgres package-oracle repo-index repo-update \
-        git-push git-commit git-set-remote
+        git-push git-commit git-set-remote \
+        delete-postgres delete-oracle delete-cnpg-all delete-all
 
 # Default target
 help:
@@ -21,10 +22,15 @@ help:
 	@echo "  make install-all            Install both databases"
 	@echo ""
 	@echo "Uninstallation:"
-	@echo "  make uninstall-postgres     Uninstall PostgreSQL cluster"
-	@echo "  make uninstall-oracle       Uninstall Oracle XE database"
-	@echo "  make uninstall-all          Uninstall both databases"
-	@echo "  make clean                  Uninstall all and delete namespaces"
+	@echo "  make uninstall-postgres     Uninstall PostgreSQL Helm release"
+	@echo "  make uninstall-oracle       Uninstall Oracle XE Helm release"
+	@echo "  make uninstall-all          Uninstall both Helm releases"
+	@echo ""
+	@echo "Deletion (Full Cleanup):"
+	@echo "  make delete-postgres        Delete PostgreSQL + namespace + PVCs"
+	@echo "  make delete-oracle          Delete Oracle XE + namespace + PVCs"
+	@echo "  make delete-cnpg-all        Delete PostgreSQL + CNPG operator + CRDs"
+	@echo "  make delete-all             Delete everything (both DBs + namespaces)"
 	@echo ""
 	@echo "Development:"
 	@echo "  make lint                   Lint all Helm charts"
@@ -58,8 +64,8 @@ ORACLE_NAMESPACE ?= oracle
 ORACLE_VALUES ?= 
 
 # CNPG Operator
-CNPG_VERSION ?= 1.22.0
-CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.22/releases/cnpg-$(CNPG_VERSION).yaml
+CNPG_VERSION ?= 1.25.0
+CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.25/releases/cnpg-$(CNPG_VERSION).yaml
 
 # Git
 GIT_REPO ?= https://github.com/vivekch0976/helm.git
@@ -76,9 +82,9 @@ REPO_URL ?=
 
 install-cnpg-operator:
 	@echo "Installing CNPG Operator v$(CNPG_VERSION)..."
-	kubectl apply -f $(CNPG_MANIFEST)
+	kubectl apply --server-side -f $(CNPG_MANIFEST)
 	@echo "Waiting for CNPG operator to be ready..."
-	kubectl wait --for=condition=available --timeout=120s deployment/cnpg-controller-manager -n cnpg-system
+	kubectl wait --for=condition=available --timeout=180s deployment/cnpg-controller-manager -n cnpg-system
 	@echo "CNPG Operator installed successfully!"
 
 uninstall-cnpg-operator:
@@ -117,6 +123,22 @@ uninstall-postgres:
 	@echo "Uninstalling PostgreSQL cluster..."
 	helm uninstall $(POSTGRES_RELEASE) --namespace $(POSTGRES_NAMESPACE) --ignore-not-found
 	@echo "PostgreSQL cluster uninstalled!"
+
+delete-postgres: uninstall-postgres
+	@echo "Deleting PostgreSQL namespace and PVCs..."
+	kubectl delete pvc --all -n $(POSTGRES_NAMESPACE) --ignore-not-found=true
+	kubectl delete namespace $(POSTGRES_NAMESPACE) --ignore-not-found=true
+	@echo "PostgreSQL fully deleted!"
+
+delete-cnpg-all: delete-postgres
+	@echo "Deleting CNPG Operator and all resources..."
+	kubectl delete namespace cnpg-system --ignore-not-found=true
+	kubectl delete validatingwebhookconfiguration cnpg-validating-webhook-configuration --ignore-not-found=true
+	kubectl delete mutatingwebhookconfiguration cnpg-mutating-webhook-configuration --ignore-not-found=true
+	kubectl delete crd backups.postgresql.cnpg.io clusters.postgresql.cnpg.io poolers.postgresql.cnpg.io scheduledbackups.postgresql.cnpg.io clusterimagecatalogs.postgresql.cnpg.io databases.postgresql.cnpg.io imagecatalogs.postgresql.cnpg.io publications.postgresql.cnpg.io subscriptions.postgresql.cnpg.io --ignore-not-found=true
+	kubectl delete clusterrole cnpg-manager cnpg-database-editor-role cnpg-database-viewer-role cnpg-publication-editor-role cnpg-publication-viewer-role cnpg-subscription-editor-role cnpg-subscription-viewer-role --ignore-not-found=true
+	kubectl delete clusterrolebinding cnpg-manager-rolebinding --ignore-not-found=true
+	@echo "CNPG fully deleted!"
 
 status-postgres:
 	@echo "=== PostgreSQL Cluster Status ==="
@@ -157,6 +179,12 @@ uninstall-oracle:
 	helm uninstall $(ORACLE_RELEASE) --namespace $(ORACLE_NAMESPACE) --ignore-not-found
 	@echo "Oracle XE uninstalled!"
 
+delete-oracle: uninstall-oracle
+	@echo "Deleting Oracle XE namespace and PVCs..."
+	kubectl delete pvc --all -n $(ORACLE_NAMESPACE) --ignore-not-found=true
+	kubectl delete namespace $(ORACLE_NAMESPACE) --ignore-not-found=true
+	@echo "Oracle XE fully deleted!"
+
 status-oracle:
 	@echo "=== Oracle XE Status ==="
 	kubectl get pods -n $(ORACLE_NAMESPACE) -l app.kubernetes.io/name=oracle-xe
@@ -191,11 +219,11 @@ lint:
 	helm lint ./oracle-xe
 	@echo "All charts passed linting!"
 
-clean: uninstall-all
-	@echo "Deleting namespaces..."
-	kubectl delete namespace $(POSTGRES_NAMESPACE) --ignore-not-found=true
-	kubectl delete namespace $(ORACLE_NAMESPACE) --ignore-not-found=true
-	@echo "Cleanup complete!"
+delete-all: delete-postgres delete-oracle
+	@echo "All databases fully deleted!"
+
+clean: delete-cnpg-all delete-oracle
+	@echo "Full cleanup complete!"
 
 #------------------------------------------------------------------------------
 # Helm Repository
