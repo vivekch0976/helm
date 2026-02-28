@@ -15,11 +15,8 @@ export
 help:
 	@echo "Database Helm Charts - Makefile"
 	@echo ""
-	@echo "Prerequisites:"
-	@echo "  make install-cnpg-operator  Install CNPG operator (required for PostgreSQL)"
-	@echo ""
 	@echo "Installation:"
-	@echo "  make install-postgres       Install CNPG PostgreSQL cluster"
+	@echo "  make install-postgres       Deploy PostgreSQL (operator + cluster + wait for ready)"
 	@echo "  make install-oracle         Install Oracle XE database"
 	@echo "  make install-all            Install both databases"
 	@echo ""
@@ -98,7 +95,23 @@ install-postgres: install-cnpg-operator
 		--namespace $(POSTGRES_NAMESPACE) \
 		--create-namespace \
 		$(if $(POSTGRES_VALUES),-f $(POSTGRES_VALUES),)
-	@echo "PostgreSQL cluster installation initiated!"
+	@echo "Waiting for PostgreSQL cluster to be ready..."
+	@kubectl wait --for=condition=Ready --timeout=300s cluster/$(POSTGRES_RELEASE)-cluster -n $(POSTGRES_NAMESPACE) 2>/dev/null || \
+		(echo "Cluster is starting... checking pod status:" && kubectl get pods -n $(POSTGRES_NAMESPACE) -l cnpg.io/cluster=$(POSTGRES_RELEASE)-cluster)
+	@echo ""
+	@echo "=============================================="
+	@echo "PostgreSQL cluster deployed successfully!"
+	@echo "=============================================="
+	@echo ""
+	@echo "Connection Details:"
+	@echo "  Host: $(POSTGRES_RELEASE)-cluster-rw.$(POSTGRES_NAMESPACE).svc.cluster.local"
+	@echo "  Port: 5432"
+	@echo "  Database: appdb"
+	@echo ""
+	@echo "Quick connect:"
+	@echo "  make port-forward-postgres"
+	@echo "  psql -h localhost -U appuser -d appdb"
+	@echo ""
 
 uninstall-postgres:
 	@echo "Uninstalling PostgreSQL cluster..."

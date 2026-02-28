@@ -37,10 +37,10 @@ make help
 
 | Command | Description |
 |---------|-------------|
-| `make install-cnpg-operator` | Install CNPG operator (required for PostgreSQL) |
-| `make install-postgres` | Install CNPG PostgreSQL cluster (includes operator) |
+| `make install-postgres` | **One command to deploy everything**: CNPG operator + PostgreSQL cluster + waits for ready |
 | `make install-oracle` | Install Oracle XE database |
 | `make install-all` | Install both databases |
+| `make install-cnpg-operator` | Install CNPG operator only (standalone) |
 
 #### Uninstallation Commands
 
@@ -99,7 +99,7 @@ make help
 ### Examples
 
 ```bash
-# Install PostgreSQL with one command (includes operator)
+# Deploy PostgreSQL with ONE command (installs operator + cluster + waits for ready)
 make install-postgres
 
 # Install with custom values file
