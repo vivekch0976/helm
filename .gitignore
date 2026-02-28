@@ -1,0 +1,16 @@
+# Environment file (contains local configuration)
+.env
+
+# Helm packages
+packages/
+*.tgz
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,11 +1,15 @@
 # Makefile for Database Helm Charts
 # Usage: make <target>
 
+# Load environment variables from .env file if it exists
+-include .env
+export
+
 .PHONY: help install-cnpg-operator install-postgres uninstall-postgres install-oracle uninstall-oracle \
         install-all uninstall-all lint template-postgres template-oracle status-postgres status-oracle \
         logs-postgres logs-oracle port-forward-postgres port-forward-oracle clean \
         package package-postgres package-oracle repo-index repo-update \
-        git-push git-commit
+        git-push git-commit git-set-remote
 
 # Default target
 help:
@@ -35,6 +39,10 @@ help:
 	@echo "  make repo-index             Generate Helm repo index"
 	@echo "  make repo-update            Package charts and update index"
 	@echo ""
+	@echo "Git Operations:"
+	@echo "  make git-push               Commit and push to GitHub"
+	@echo "  make git-set-remote         Set git remote from .env"
+	@echo ""
 	@echo "Operations:"
 	@echo "  make status-postgres        Show PostgreSQL cluster status"
 	@echo "  make status-oracle          Show Oracle XE status"
@@ -43,7 +51,7 @@ help:
 	@echo "  make port-forward-postgres  Port forward PostgreSQL (5432)"
 	@echo "  make port-forward-oracle    Port forward Oracle XE (1521)"
 
-# Variables
+# Variables (defaults can be overridden in .env file)
 POSTGRES_RELEASE ?= postgres
 POSTGRES_NAMESPACE ?= postgres
 POSTGRES_VALUES ?= 
@@ -55,6 +63,15 @@ ORACLE_VALUES ?=
 # CNPG Operator
 CNPG_VERSION ?= 1.22.0
 CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.22/releases/cnpg-$(CNPG_VERSION).yaml
+
+# Git
+GIT_REPO ?= https://github.com/vivekch0976/helm.git
+GIT_BRANCH ?= master
+COMMIT_MSG ?= Update Helm charts
+
+# Helm Repository
+CHARTS_DIR ?= packages
+REPO_URL ?= 
 
 #------------------------------------------------------------------------------
 # Prerequisites
@@ -171,10 +188,6 @@ clean: uninstall-all
 # Helm Repository
 #------------------------------------------------------------------------------
 
-# Directory for packaged charts
-CHARTS_DIR ?= packages
-REPO_URL ?= 
-
 package-postgres: lint
 	@echo "Packaging cnpg-postgres chart..."
 	@mkdir -p $(CHARTS_DIR)
@@ -215,14 +228,17 @@ repo-update: package repo-index
 # Git Operations
 #------------------------------------------------------------------------------
 
-COMMIT_MSG ?= Update Helm charts
-
 git-commit:
 	@echo "Committing changes..."
 	git add -A
 	git commit -m "$(COMMIT_MSG)" || echo "Nothing to commit"
 
 git-push: git-commit
-	@echo "Pushing to GitHub..."
-	git push origin master
+	@echo "Pushing to $(GIT_REPO) ($(GIT_BRANCH))..."
+	git push origin $(GIT_BRANCH)
 	@echo "Pushed to GitHub successfully!"
+
+git-set-remote:
+	@echo "Setting git remote to $(GIT_REPO)..."
+	git remote set-url origin $(GIT_REPO) || git remote add origin $(GIT_REPO)
+	@echo "Remote set successfully!"
