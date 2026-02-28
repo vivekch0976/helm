@@ -60,6 +60,7 @@ spec:
   {{- if .Values.backup.enabled }}
   # Backup configuration
   backup:
+    {{- if eq .Values.backup.type "s3" }}
     barmanObjectStore:
       destinationPath: {{ .Values.backup.s3.destinationPath | quote }}
       endpointURL: {{ .Values.backup.s3.endpointURL | quote }}
@@ -74,5 +75,9 @@ spec:
         compression: {{ .Values.backup.s3.compression }}
       data:
         compression: {{ .Values.backup.s3.compression }}
+    {{- else }}
+    volumeSnapshot:
+      className: {{ .Values.backup.local.storageClass }}
+    {{- end }}
     retentionPolicy: {{ .Values.backup.retentionPolicy | quote }}
   {{- end }}

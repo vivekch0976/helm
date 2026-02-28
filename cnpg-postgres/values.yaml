@@ -74,16 +74,24 @@ monitoring:
 secrets:
   superuser:
     username: postgres
-    password: supersecretpassword
+    password: postgres
   appuser:
     username: appuser
-    password: appuserpassword
+    password: appuser
 
 # Backup configuration
 backup:
   enabled: false
   schedule: "0 0 * * *"
   retentionPolicy: "30d"
+  # type: local or s3
+  type: local
+  # Local storage backup configuration
+  local:
+    destinationPath: /backup
+    storageClass: standard
+    size: 20Gi
+  # S3 backup configuration (used when type: s3)
   s3:
     destinationPath: "s3://postgres-backups/"
     endpointURL: "http://minio:9000"

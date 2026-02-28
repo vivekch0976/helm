@@ -11,6 +11,11 @@ spec:
   backupOwnerReference: self
   cluster:
     name: {{ include "cnpg-postgres.clusterName" . }}
+  {{- if eq .Values.backup.type "local" }}
+  method: volumeSnapshot
+  {{- else }}
+  method: barmanObjectStore
+  {{- end }}
   immediate: false
   suspend: false
 {{- end }}
