@@ -37,7 +37,8 @@ make help
 
 | Command | Description |
 |---------|-------------|
-| `make install-postgres` | **One command to deploy everything**: CNPG operator + PostgreSQL cluster + waits for ready |
+| `make install-postgres` | Deploy CNPG operator + PostgreSQL cluster + wait for ready |
+| `make install-postgres-connect` | Install PostgreSQL + auto port-forward (localhost:5432) |
 | `make install-oracle` | Install Oracle XE database |
 | `make install-all` | Install both databases |
 | `make install-cnpg-operator` | Install CNPG operator only (standalone) |
@@ -92,7 +93,7 @@ make help
 | `ORACLE_RELEASE` | Helm release name for Oracle | `oracle` |
 | `ORACLE_NAMESPACE` | Kubernetes namespace for Oracle | `oracle` |
 | `ORACLE_VALUES` | Custom values file for Oracle | `` |
-| `CNPG_VERSION` | CNPG operator version | `1.22.0` |
+| `CNPG_VERSION` | CNPG operator Helm chart version | `0.22.1` |
 | `CHARTS_DIR` | Directory for packaged charts | `packages` |
 | `COMMIT_MSG` | Default git commit message | `Update Helm charts` |
 
@@ -101,6 +102,9 @@ make help
 ```bash
 # Deploy PostgreSQL with ONE command (installs operator + cluster + waits for ready)
 make install-postgres
+
+# Deploy PostgreSQL + auto port-forward (ready to connect immediately)
+make install-postgres-connect
 
 # Install with custom values file
 make install-postgres POSTGRES_VALUES=custom-postgres.yaml
@@ -162,9 +166,9 @@ helm install postgres ./cnpg-postgres -f custom-values.yaml
 | `namespace.name` | Namespace name | `postgres` |
 | `cluster.name` | Cluster name | `postgres-cluster` |
 | `cluster.instances` | Number of replicas | `3` |
-| `cluster.image.tag` | PostgreSQL version | `16.2` |
+| `cluster.image.tag` | PostgreSQL version | `18` |
 | `storage.size` | Storage size | `10Gi` |
-| `storage.storageClass` | Storage class | `standard` |
+| `storage.storageClass` | Storage class | `local-path` |
 | `secrets.superuser.password` | Superuser password | `supersecretpassword` |
 | `secrets.appuser.password` | App user password | `appuserpassword` |
 | `bootstrap.database` | Database name | `appdb` |
@@ -176,11 +180,34 @@ helm install postgres ./cnpg-postgres -f custom-values.yaml
 ### Connect to PostgreSQL
 
 ```bash
-# Port forward
-kubectl port-forward -n postgres svc/postgres-cluster-rw 5432:5432
+# Option 1: Port forward (run in background)
+make port-forward-postgres
 
-# Connect
-psql -h localhost -U appuser -d appdb
+# Then connect with:
+psql 'postgresql://appuser:appuser@localhost:5432/appdb'
+
+# Option 2: Install with auto port-forward
+make install-postgres-connect
+
+# Option 3: Direct pod access (no port-forward needed)
+kubectl exec -it postgres-cnpg-postgres-1 -n postgres -- psql -U postgres -d appdb
+```
+
+#### Connection Strings
+
+**Internal (from apps in cluster):**
+```
+postgresql://appuser:appuser@postgres-cnpg-postgres-rw.postgres.svc:5432/appdb
+```
+
+**Read-Only Replicas:**
+```
+postgresql://appuser:appuser@postgres-cnpg-postgres-ro.postgres.svc:5432/appdb
+```
+
+**External (with port-forward on localhost:5432):**
+```
+postgresql://appuser:appuser@localhost:5432/appdb
 ```
 
 ### Uninstall
